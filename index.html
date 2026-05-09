@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Reinforcement Learning — Q-Learning Grid World</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-primary: #ffffff;
+      --bg-secondary: #f5f5f3;
+      --bg-tertiary: #eeede8;
+      --bg-info: #e6f1fb;
+      --bg-success: #eaf3de;
+      --text-primary: #1a1a18;
+      --text-secondary: #6b6b66;
+      --text-tertiary: #9c9a92;
+      --text-info: #185fa5;
+      --text-success: #3b6d11;
+      --border: rgba(0,0,0,0.12);
+      --border-md: rgba(0,0,0,0.22);
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --radius-xl: 16px;
+      --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-primary: #1e1e1c;
+        --bg-secondary: #2a2a28;
+        --bg-tertiary: #323230;
+        --bg-info: #0c2a45;
+        --bg-success: #1a2e0a;
+        --text-primary: #e8e6de;
+        --text-secondary: #a0a098;
+        --text-tertiary: #6e6c66;
+        --text-info: #7ab8f0;
+        --text-success: #90c55a;
+        --border: rgba(255,255,255,0.10);
+        --border-md: rgba(255,255,255,0.20);
+      }
+    }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 840px;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.5rem;
+    }
+    .header h1 { font-size: 22px; font-weight: 500; color: var(--text-primary); }
+    .header p  { font-size: 13px; color: var(--text-secondary); margin-top: 3px; }
+    .badge {
+      font-size: 11px; font-weight: 500;
+      padding: 4px 12px; border-radius: var(--radius-md);
+      background: var(--bg-info); color: var(--text-info);
+    }
+
+    /* Main layout */
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 220px;
+      gap: 16px;
+      align-items: start;
+    }
+
+    /* Canvas */
+    canvas#gc {
+      display: block;
+      width: 100%;
+      border-radius: var(--radius-lg);
+      border: 0.5px solid var(--border);
+      background: var(--bg-secondary);
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+      margin-top: 10px;
+    }
+    .leg-item {
+      display: flex; align-items: center;
+      gap: 5px; font-size: 12px; color: var(--text-secondary);
+    }
+    .leg-dot {
+      width: 12px; height: 12px;
+      border-radius: 3px; flex-shrink: 0;
+    }
+    .edit-hint {
+      font-size: 12px; color: var(--text-tertiary);
+      margin-top: 8px; line-height: 1.5;
+    }
+
+    /* Panel */
+    .panel { display: flex; flex-direction: column; gap: 12px; }
+
+    .card {
+      background: var(--bg-primary);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 14px;
+    }
+    .card-title {
+      font-size: 11px; font-weight: 500;
+      color: var(--text-tertiary);
+      text-transform: uppercase; letter-spacing: .05em;
+      margin-bottom: 10px;
+    }
+
+    .stat-row {
+      display: flex; justify-content: space-between;
+      align-items: baseline; padding: 3px 0;
+    }
+    .stat-label { font-size: 13px; color: var(--text-secondary); }
+    .stat-val   { font-size: 14px; font-weight: 500; color: var(--text-primary); }
+    .stat-val.good { color: var(--text-success); }
+
+    /* Explore bar */
+    .phase-label { font-size: 11px; color: var(--text-tertiary); margin-top: 8px; }
+    .phase-bar {
+      height: 4px; border-radius: 2px;
+      background: var(--bg-secondary); overflow: hidden; margin-top: 4px;
+    }
+    .phase-fill {
+      height: 100%; border-radius: 2px;
+      background: var(--text-info); transition: width .3s;
+    }
+
+    /* Controls */
+    .ctrl-row {
+      display: flex; align-items: center;
+      gap: 8px; margin-bottom: 8px;
+    }
+    .ctrl-label {
+      font-size: 12px; color: var(--text-secondary);
+      min-width: 24px; font-style: italic;
+    }
+    .ctrl-val {
+      font-size: 12px; font-weight: 500;
+      color: var(--text-primary); min-width: 34px; text-align: right;
+    }
+    .ctrl-row input[type=range] { flex: 1; accent-color: var(--text-info); }
+
+    /* Buttons */
+    .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    button {
+      font-size: 13px; padding: 6px 14px;
+      border-radius: var(--radius-md);
+      border: 0.5px solid var(--border-md);
+      background: transparent; color: var(--text-primary);
+      cursor: pointer; transition: background .15s, opacity .15s;
+      display: inline-flex; align-items: center; gap: 5px;
+      font-family: var(--font);
+    }
+    button:hover  { background: var(--bg-secondary); }
+    button:active { opacity: .75; }
+
+    button.primary {
+      background: var(--bg-info);
+      color: var(--text-info);
+      border-color: rgba(24, 95, 165, 0.3);
+    }
+    button.primary:hover { opacity: .85; background: var(--bg-info); }
+
+    .mode-btn { font-size: 11px; padding: 3px 9px; }
+    .mode-btn.active {
+      background: var(--bg-info);
+      color: var(--text-info);
+      border-color: rgba(24, 95, 165, 0.3);
+    }
+
+    .edit-sub {
+      font-size: 12px; color: var(--text-secondary); margin-top: 10px; margin-bottom: 6px;
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .layout { grid-template-columns: 1fr; }
+      .panel  { flex-direction: row; flex-wrap: wrap; }
+      .card   { flex: 1 1 calc(50% - 8px); }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div>
+      <h1>Reinforcement Learning</h1>
+      <p>Q-Learning · Grid World Navigation</p>
+    </div>
+    <span class="badge">Algorithm #3</span>
+  </div>
+
+  <div class="layout">
+
+    <!-- Grid -->
+    <div>
+      <canvas id="gc" width="440" height="440"></canvas>
+      <div class="legend">
+        <div class="leg-item"><div class="leg-dot" style="background:#4CAF84"></div>Agent</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#E8A838"></div>Goal</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#E05555"></div>Trap</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#6B7280"></div>Wall</div>
+        <div class="leg-item"><div class="leg-dot" style="background:linear-gradient(90deg,#d6e8ff,#3B8BD4)"></div>Q-value heat</div>
+      </div>
+      <p class="edit-hint">Click cells to place/remove walls. Arrows show the agent's current best learned action per state.</p>
+    </div>
+
+    <!-- Side panel -->
+    <div class="panel">
+
+      <!-- Stats -->
+      <div class="card">
+        <div class="card-title">Statistics</div>
+        <div class="stat-row">
+          <span class="stat-label">Episode</span>
+          <span class="stat-val" id="ep">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Steps this ep.</span>
+          <span class="stat-val" id="st">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Reward</span>
+          <span class="stat-val" id="rw">0.0</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Best episode</span>
+          <span class="stat-val good" id="be">—</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">ε (epsilon)</span>
+          <span class="stat-val" id="eps-val">1.00</span>
+        </div>
+        <p class="phase-label">Explore → Exploit</p>
+        <div class="phase-bar">
+          <div class="phase-fill" id="pf" style="width:100%"></div>
+        </div>
+      </div>
+
+      <!-- Hyperparameters -->
+      <div class="card">
+        <div class="card-title">Hyperparameters</div>
+        <div class="ctrl-row">
+          <span class="ctrl-label" title="Learning rate">α</span>
+          <input type="range" id="lr" min="1" max="50" value="20" step="1">
+          <span class="ctrl-val" id="lr-v">0.20</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label" title="Discount factor">γ</span>
+          <input type="range" id="gm" min="50" max="99" value="90" step="1">
+          <span class="ctrl-val" id="gm-v">0.90</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label" title="Speed">⚡</span>
+          <input type="range" id="spd" min="1" max="20" value="5" step="1">
+          <span class="ctrl-val" id="spd-v">5×</span>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="card">
+        <div class="card-title">Controls</div>
+        <div class="btns">
+          <button class="primary" id="btnPlay" onclick="togglePlay()">
+            <i class="ti ti-player-play"></i> Play
+          </button>
+          <button onclick="resetAll()">
+            <i class="ti ti-refresh"></i> Reset
+          </button>
+        </div>
+        <p class="edit-sub">Edit mode:</p>
+        <div class="btns">
+          <button class="mode-btn active" id="mWall"  onclick="setMode('wall')">Wall</button>
+          <button class="mode-btn"        id="mTrap"  onclick="setMode('trap')">Trap</button>
+          <button class="mode-btn"        id="mClear" onclick="setMode('clear')">Clear</button>
+        </div>
+      </div>
+
+    </div><!-- /panel -->
+  </div><!-- /layout -->
+</div><!-- /container -->
+
+<script>
+/* ─── Constants ─────────────────────────────────────────── */
+const GRID    = 8;
+const ACTIONS = [
+  { dx: 0, dy: -1, name: 'U' },
+  { dx: 0, dy:  1, name: 'D' },
+  { dx:-1, dy:  0, name: 'L' },
+  { dx: 1, dy:  0, name: 'R' }
+];
+const GOAL  = { x: 7, y: 7 };
+const START = { x: 0, y: 0 };
+
+const GOAL_R = 10, TRAP_R = -5, STEP_R = -0.04, WALL_R = -1;
+
+const DEFAULT_WALLS = ['2,1','2,2','2,3','4,2','4,3','4,4','5,6','6,6','3,6','3,5'];
+const DEFAULT_TRAPS = ['1,3','5,2','6,4','2,5'];
+
+/* ─── State ──────────────────────────────────────────────── */
+let walls = new Set(DEFAULT_WALLS);
+let traps = new Set(DEFAULT_TRAPS);
+let Q     = {};
+let agent = { ...START };
+
+let episode = 0, steps = 0, totalReward = 0, bestEp = null;
+let epsilon = 1.0;
+const epsilonMin   = 0.05;
+const epsilonDecay = 0.995;
+
+let lr = 0.20, gamma = 0.90, speed = 5;
+let running = false, animId = null, editMode = 'wall';
+
+/* ─── Helpers ────────────────────────────────────────────── */
+const key    = (x, y)    => `${x},${y}`;
+const inGrid = (x, y)    => x >= 0 && x < GRID && y >= 0 && y < GRID;
+const isWall = (x, y)    => walls.has(key(x, y));
+const isTrap = (x, y)    => traps.has(key(x, y));
+const isGoal = (x, y)    => x === GOAL.x && y === GOAL.y;
+
+const qKey  = (x, y, a) => `${x},${y},${a}`;
+const getQ  = (x, y, a) => Q[qKey(x, y, a)] || 0;
+const setQ  = (x, y, a, v) => { Q[qKey(x, y, a)] = v; };
+const maxQ  = (x, y)    => Math.max(...ACTIONS.map((_, i) => getQ(x, y, i)));
+const bestA = (x, y)    => {
+  let m = -Infinity, b = 0;
+  ACTIONS.forEach((_, i) => { const v = getQ(x, y, i); if (v > m) { m = v; b = i; } });
+  return b;
+};
+
+/* ─── Q-Learning step ────────────────────────────────────── */
+function chooseAction(x, y) {
+  return Math.random() < epsilon
+    ? Math.floor(Math.random() * 4)
+    : bestA(x, y);
+}
+
+function step() {
+  const a  = chooseAction(agent.x, agent.y);
+  let nx   = agent.x + ACTIONS[a].dx;
+  let ny   = agent.y + ACTIONS[a].dy;
+  let r    = STEP_R;
+  let done = false;
+
+  if (!inGrid(nx, ny) || isWall(nx, ny)) {
+    nx = agent.x; ny = agent.y; r = WALL_R;
+  } else if (isGoal(nx, ny)) {
+    r = GOAL_R;  done = true;
+  } else if (isTrap(nx, ny)) {
+    r = TRAP_R;  done = true;
+  }
+
+  // Bellman update
+  const oldQ   = getQ(agent.x, agent.y, a);
+  const target = done ? r : r + gamma * maxQ(nx, ny);
+  setQ(agent.x, agent.y, a, oldQ + lr * (target - oldQ));
+
+  totalReward += r;
+  steps++;
+  agent = { x: nx, y: ny };
+
+  if (done) {
+    episode++;
+    if (bestEp === null || steps < bestEp) bestEp = steps;
+    epsilon   = Math.max(epsilonMin, epsilon * epsilonDecay);
+    agent     = { ...START };
+    steps     = 0;
+    totalReward = 0;
+  }
+}
+
+/* ─── Rendering ──────────────────────────────────────── */
+const canvas = document.getElementById('gc');
+const ctx    = canvas.getContext('2d');
+const W      = canvas.width / GRID;
+
+function isDarkMode() {
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const dark = isDarkMode();
+
+  for (let y = 0; y < GRID; y++) {
+    for (let x = 0; x < GRID; x++) {
+      const cx = x * W, cy = y * W;
+
+      /* Cell background */
+      let bg = dark ? '#2a2a28' : '#f5f5f3';
+      if (isWall(x, y)) {
+        bg = dark ? '#4a4a46' : '#9ca3af';
+      } else if (isTrap(x, y)) {
+        bg = dark ? '#5c2020' : '#fde8e8';
+      } else if (isGoal(x, y)) {
+        bg = dark ? '#2d4a1e' : '#e8f8e8';
+      } else {
+        const mq = maxQ(x, y);
+        if (mq > 0) {
+          const t = Math.min(mq / GOAL_R, 1);
+          const r2 = dark ? Math.round(40 + t * 30)  : Math.round(245 - t * 90);
+          const g2 = dark ? Math.round(60 + t * 100) : Math.round(245 - t * 20);
+          const b2 = dark ? Math.round(60 + t * 140) : Math.round(245 - t * 100);
+          bg = `rgb(${r2},${g2},${b2})`;
+        }
+      }
+      ctx.fillStyle = bg;
+      ctx.beginPath();
+      ctx.roundRect(cx + 1, cy + 1, W - 2, W - 2, 4);
+      ctx.fill();
+
+      /* Grid line */
+      ctx.strokeStyle = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+      ctx.lineWidth   = 0.5;
+      ctx.stroke();
+
+      /* Q-value arrow */
+      if (!isWall(x, y) && !isGoal(x, y) && !isTrap(x, y)) {
+        const a  = bestA(x, y);
+        const qv = maxQ(x, y);
+        if (qv > -0.1) {
+          const dx2 = ACTIONS[a].dx, dy2 = ACTIONS[a].dy;
+          const ex  = cx + W / 2 + dx2 * (W * 0.28);
+          const ey  = cy + W / 2 + dy2 * (W * 0.28);
+          const sx  = cx + W / 2 - dx2 * (W * 0.10);
+          const sy  = cy + W / 2 - dy2 * (W * 0.10);
+          const alpha = Math.min(0.15 + Math.abs(qv / GOAL_R) * 0.7, 0.9);
+          const col = dark ? `130,180,255` : `50,100,200`;
+          ctx.strokeStyle = `rgba(${col},${alpha})`;
+          ctx.lineWidth   = 1.5;
+          ctx.lineCap     = 'round';
+          ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
+          const ang = Math.atan2(dy2, dx2);
+          ctx.beginPath();
+          ctx.moveTo(ex, ey);
+          ctx.lineTo(ex - Math.cos(ang - 0.5) * W * 0.14, ey - Math.sin(ang - 0.5) * W * 0.14);
+          ctx.lineTo(ex - Math.cos(ang + 0.5) * W * 0.14, ey - Math.sin(ang + 0.5) * W * 0.14);
+          ctx.closePath();
+          ctx.fillStyle = `rgba(${col},${alpha})`;
+          ctx.fill();
+        }
+      }
+
+      /* Icons for goal / trap */
+      if (isGoal(x, y)) {
+        ctx.fillStyle    = '#E8A838';
+        ctx.font         = `${W * 0.5}px sans-serif`;
+        ctx.textAlign    = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('★', cx + W / 2, cy + W / 2 + 1);
+      }
+      if (isTrap(x, y)) {
+        ctx.fillStyle    = '#E05555';
+        ctx.font         = `${W * 0.45}px sans-serif`;
+        ctx.textAlign    = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('✕', cx + W / 2, cy + W / 2 + 1);
+      }
+    }
+  }
+
+  /* Agent */
+  const r = W * 0.28;
+  ctx.beginPath();
+  ctx.arc(agent.x * W + W / 2, agent.y * W + W / 2, r, 0, Math.PI * 2);
+  ctx.fillStyle   = '#4CAF84';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+  ctx.lineWidth   = 1.5;
+  ctx.stroke();
+
+  updateUI();
+}
+
+function updateUI() {
+  document.getElementById('ep').textContent     = episode;
+  document.getElementById('st').textContent     = steps;
+  document.getElementById('rw').textContent     = totalReward.toFixed(1);
+  document.getElementById('be').textContent     = bestEp !== null ? bestEp + ' steps' : '—';
+  document.getElementById('eps-val').textContent = epsilon.toFixed(2);
+  document.getElementById('pf').style.width     = (epsilon * 100) + '%';
+}
+
+/* ─── Animation loop ─────────────────────────────────────── */
+function loop() {
+  const n = Math.round(speed);
+  for (let i = 0; i < n; i++) step();
+  draw();
+  if (running) animId = requestAnimationFrame(loop);
+}
+
+function togglePlay() {
+  running = !running;
+  const btn = document.getElementById('btnPlay');
+  if (running) {
+    btn.innerHTML = '<i class="ti ti-player-pause"></i> Pause';
+    animId = requestAnimationFrame(loop);
+  } else {
+    btn.innerHTML = '<i class="ti ti-player-play"></i> Play';
+    cancelAnimationFrame(animId);
+  }
+}
+
+function resetAll() {
+  running = false;
+  cancelAnimationFrame(animId);
+  document.getElementById('btnPlay').innerHTML = '<i class="ti ti-player-play"></i> Play';
+  Q           = {};
+  agent       = { ...START };
+  episode     = 0;
+  steps       = 0;
+  totalReward = 0;
+  bestEp      = null;
+  epsilon     = 1.0;
+  draw();
+}
+
+/* ─── Edit mode ──────────────────────────────────────────── */
+function setMode(m) {
+  editMode = m;
+  ['wall', 'trap', 'clear'].forEach(k => {
+    const id = 'm' + k.charAt(0).toUpperCase() + k.slice(1);
+    document.getElementById(id).classList.toggle('active', k === m);
+  });
+}
+
+canvas.addEventListener('click', e => {
+  const rect   = canvas.getBoundingClientRect();
+  const scaleX = canvas.width  / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const px     = (e.clientX - rect.left) * scaleX;
+  const py     = (e.clientY - rect.top)  * scaleY;
+  const gx     = Math.floor(px / W);
+  const gy     = Math.floor(py / W);
+  if (!inGrid(gx, gy)) return;
+  if ((gx === START.x && gy === START.y) || (gx === GOAL.x && gy === GOAL.y)) return;
+  const k = key(gx, gy);
+  if (editMode === 'wall')  { walls.has(k) ? walls.delete(k) : walls.add(k); traps.delete(k); }
+  else if (editMode === 'trap') { traps.has(k) ? traps.delete(k) : traps.add(k); walls.delete(k); }
+  else { walls.delete(k); traps.delete(k); }
+  draw();
+});
+
+/* ─── Slider listeners ───────────────────────────────────── */
+document.getElementById('lr').addEventListener('input', function () {
+  lr = this.value / 100;
+  document.getElementById('lr-v').textContent = lr.toFixed(2);
+});
+document.getElementById('gm').addEventListener('input', function () {
+  gamma = this.value / 100;
+  document.getElementById('gm-v').textContent = gamma.toFixed(2);
+});
+document.getElementById('spd').addEventListener('input', function () {
+  speed = parseInt(this.value);
+  document.getElementById('spd-v').textContent = speed + '×';
+});
+
+/* ─── Init ───────────────────────────────────────────────── */
+draw();
+</script>
+</body>
+</html>
